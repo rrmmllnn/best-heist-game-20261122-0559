@@ -1,407 +1,603 @@
-// Gilded Vault — everything you see.
-// One job: paint the museum, its people, its cones, and the HUD on canvas.
+// VelvetRender — every pixel of the Aurelia Casino, drawn on one canvas.
+// Safe cover, danger and loot are obvious at a glance: green felt, gold
+// loot, red danger, green exit. No images, no fonts, no network.
 
-import { TILE, COLS, ROWS, VIEW_W, VIEW_H, PALETTE, TUNING, LEVEL_NAMES, LOOT_NAMES } from './config.js';
-import { laserIsLive } from './vision.js';
-
-function conePath(ctx, x, y, angle, range, half) {
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.arc(x, y, range, angle - half, angle + half);
-  ctx.closePath();
+function velvetDrawFloor(ctx, level) {
+  ctx.fillStyle = VELVET_COLORS.carpet;
+  ctx.fillRect(0, 0, 1280, 720);
+  ctx.fillStyle = 'rgba(212, 175, 55, 0.10)';
+  for (let y = 48; y < 720; y += 96) {
+    for (let x = 48; x < 1280; x += 96) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-7, -7, 14, 14);
+      ctx.restore();
+    }
+  }
+  // Vault floor: marble gold.
+  ctx.fillStyle = '#4a3413';
+  ctx.fillRect(536, 24, 208, 150);
+  ctx.fillStyle = 'rgba(242, 193, 78, 0.16)';
+  for (let x = 552; x < 744; x += 32) {
+    ctx.fillRect(x, 40, 16, 118);
+  }
+  // Service corridor: cold tile.
+  ctx.fillStyle = '#232838';
+  ctx.fillRect(1080, 24, 176, 412);
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  for (let y = 40; y < 420; y += 40) ctx.fillRect(1080, y, 176, 2);
+  // Red carpet from the doors to the floor.
+  ctx.fillStyle = '#7a1f2b';
+  ctx.fillRect(596, 560, 88, 136);
+  ctx.fillStyle = VELVET_COLORS.gold;
+  ctx.fillRect(596, 560, 4, 136);
+  ctx.fillRect(680, 560, 4, 136);
+  // Lounge carpet.
+  ctx.fillStyle = '#2c1b3d';
+  ctx.fillRect(390, 310, 160, 150);
 }
 
-function drawCone(ctx, x, y, angle, range, half, fill) {
-  conePath(ctx, x, y, angle, range, half);
-  ctx.fillStyle = fill;
-  ctx.fill();
+function velvetDrawWalls(ctx, level) {
+  for (const w of level.walls) {
+    ctx.fillStyle = VELVET_COLORS.wall;
+    ctx.fillRect(w.x, w.y, w.w, w.h);
+    ctx.fillStyle = VELVET_COLORS.wallTop;
+    if (w.h <= 24 && w.w > w.h) ctx.fillRect(w.x, w.y, w.w, 4);
+    else if (w.w <= 24) ctx.fillRect(w.x, w.y, 4, w.h);
+  }
 }
 
-function drawFloor(ctx, parsed, rows) {
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const ch = rows[r][c];
-      const x = c * TILE;
-      const y = r * TILE;
-      if (ch === '#') continue;
-      ctx.fillStyle = (c + r) % 2 === 0 ? PALETTE.floorDark : PALETTE.floorLight;
-      ctx.fillRect(x, y, TILE, TILE);
-      if (ch === 'v') {
-        ctx.fillStyle = '#0d2126';
-        ctx.fillRect(x + 3, y + 3, TILE - 6, TILE - 6);
-        ctx.strokeStyle = '#3a6a76';
-        ctx.lineWidth = 2;
-        for (let i = 1; i < 4; i++) {
-          ctx.beginPath();
-          ctx.moveTo(x + 6, y + i * 10);
-          ctx.lineTo(x + TILE - 6, y + i * 10);
-          ctx.stroke();
-        }
-      } else {
-        ctx.strokeStyle = PALETTE.marbleVein;
-        ctx.lineWidth = 1;
+function velvetDrawCover(ctx, level) {
+  for (const c of level.cover) {
+    if (c.kind === 'slots') {
+      ctx.fillStyle = '#3d2b5c';
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+      ctx.fillStyle = '#241a33';
+      ctx.fillRect(c.x + 4, c.y + 4, c.w - 8, c.h - 8);
+      for (let i = 0; i < 3; i++) {
+        const sx = c.x + 10 + i * 28;
+        ctx.fillStyle = i % 2 ? '#ff5d8f' : '#ffd166';
+        ctx.fillRect(sx, c.y + 8, 20, 18);
+      }
+      ctx.fillStyle = VELVET_COLORS.gold;
+      ctx.font = 'bold 9px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.label, c.x + c.w / 2, c.y + c.h - 4);
+    } else if (c.kind === 'blackjack') {
+      ctx.fillStyle = '#0d2b1a';
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+      ctx.strokeStyle = VELVET_COLORS.gold;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(c.x + 2, c.y + 2, c.w - 4, c.h - 4);
+      ctx.fillStyle = VELVET_COLORS.felt;
+      ctx.beginPath();
+      ctx.ellipse(c.x + c.w / 2, c.y + c.h / 2, c.w / 2 - 8, c.h / 2 - 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = VELVET_COLORS.cream;
+      ctx.font = 'bold 10px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.label, c.x + c.w / 2, c.y + c.h / 2 + 3);
+    } else if (c.kind === 'roulette') {
+      ctx.fillStyle = '#3d2b5c';
+      ctx.beginPath();
+      ctx.arc(c.x + c.w / 2, c.y + c.h / 2, c.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = VELVET_COLORS.felt;
+      ctx.beginPath();
+      ctx.arc(c.x + c.w / 2, c.y + c.h / 2, c.w / 2 - 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = VELVET_COLORS.gold;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(c.x + c.w / 2, c.y + c.h / 2, c.w / 2 - 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#f5ead1';
+      ctx.beginPath();
+      ctx.arc(c.x + c.w / 2, c.y + c.h / 2, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = VELVET_COLORS.gold;
+      ctx.font = 'bold 10px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.label, c.x + c.w / 2, c.y + c.h + 14);
+    } else if (c.kind === 'bar') {
+      ctx.fillStyle = '#5a3a1e';
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+      ctx.fillStyle = '#8b5a2b';
+      ctx.fillRect(c.x, c.y, c.w, 10);
+      ctx.fillStyle = VELVET_COLORS.cream;
+      ctx.font = 'bold 11px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.label, c.x + c.w / 2, c.y + c.h - 8);
+    } else if (c.kind === 'planter') {
+      ctx.fillStyle = '#1e4d2b';
+      ctx.beginPath();
+      ctx.arc(c.x + 17, c.y + 17, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2f7a44';
+      ctx.beginPath();
+      ctx.arc(c.x + 17, c.y + 17, 10, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (c.kind === 'sofa') {
+      ctx.fillStyle = '#6d1f2e';
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+      ctx.fillStyle = '#8e2a3d';
+      ctx.fillRect(c.x + 6, c.y + 6, c.w - 12, c.h - 12);
+      ctx.fillStyle = VELVET_COLORS.gold;
+      ctx.font = 'bold 11px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.label, c.x + c.w / 2, c.y + c.h / 2 + 4);
+    }
+  }
+  // Velvet ropes: red cord, gold posts.
+  for (const r of level.ropes) {
+    ctx.fillStyle = '#a31621';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
+  ctx.fillStyle = VELVET_COLORS.gold;
+  const posts = [[380, 300], [560, 300], [380, 470], [450, 470], [500, 470], [560, 470]];
+  for (const p of posts) {
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function velvetDrawDoors(ctx, level) {
+  for (const d of level.doors) {
+    if (d.open) {
+      ctx.fillStyle = '#0a0616';
+      ctx.fillRect(d.x, d.y, d.w, d.h);
+      continue;
+    }
+    ctx.fillStyle = '#4a3413';
+    ctx.fillRect(d.x, d.y, d.w, d.h);
+    ctx.strokeStyle = VELVET_COLORS.gold;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(d.x + 1, d.y + 1, d.w - 2, d.h - 2);
+    ctx.fillStyle = VELVET_COLORS.gold;
+    ctx.beginPath();
+    ctx.arc(d.x + d.w / 2, d.y + d.h / 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = VELVET_COLORS.cream;
+    ctx.font = 'bold 9px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    const ly = d.w > d.h ? d.y - 6 : d.y + d.h / 2 + 3;
+    const lx = d.w > d.h ? d.x + d.w / 2 : d.x - 4;
+    ctx.fillText('🔒', lx, ly);
+  }
+}
+
+function velvetDrawLoot(ctx, level) {
+  for (const l of level.loot) {
+    if (l.taken) continue;
+    if (l.kind === 'chips') {
+      const cols = ['#ff5d8f', '#ffd166', '#4ecdc4'];
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = cols[i % 3];
         ctx.beginPath();
-        ctx.moveTo(x + 8, y + 30);
-        ctx.lineTo(x + 26, y + 10);
+        ctx.arc(l.x + (i - 1) * 8, l.y, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
         ctx.stroke();
       }
-    }
-  }
-}
-
-function drawWalls(ctx, parsed, rows) {
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      if (rows[r][c] !== '#') continue;
-      const x = c * TILE;
-      const y = r * TILE;
-      ctx.fillStyle = PALETTE.wall;
-      ctx.fillRect(x, y, TILE, TILE);
-      ctx.fillStyle = PALETTE.wallTop;
-      ctx.fillRect(x, y, TILE, 6);
-      ctx.strokeStyle = 'rgba(242,193,78,0.16)';
-      ctx.strokeRect(x + 0.5, y + 0.5, TILE - 1, TILE - 1);
-    }
-  }
-  // Gilded paintings on the top wall, between the guards' patrols.
-  const frames = [4, 12, 20, 29];
-  for (const c of frames) {
-    const x = c * TILE + 4;
-    const y = 6;
-    ctx.fillStyle = PALETTE.goldDim;
-    ctx.fillRect(x, y, 32, 24);
-    ctx.fillStyle = '#274b57';
-    ctx.fillRect(x + 3, y + 3, 26, 18);
-    ctx.fillStyle = PALETTE.gold;
-    ctx.beginPath();
-    ctx.arc(x + 16, y + 12, 5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-function drawPedestals(ctx, parsed) {
-  for (const key of parsed.pedestals) {
-    const [c, r] = key.split(',').map(Number);
-    const x = c * TILE;
-    const y = r * TILE;
-    ctx.fillStyle = '#1c3038';
-    ctx.fillRect(x + 6, y + 6, TILE - 12, TILE - 12);
-    ctx.fillStyle = '#e8ddc0';
-    ctx.fillRect(x + 9, y + 9, TILE - 18, TILE - 18);
-    ctx.fillStyle = PALETTE.gold;
-    ctx.beginPath();
-    ctx.arc(x + TILE / 2, y + TILE / 2 - 4, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#7e1f2e';
-    ctx.fillRect(x + 4, y + TILE - 8, TILE - 8, 4);
-  }
-}
-
-function drawDoors(ctx, parsed) {
-  for (const door of parsed.doors) {
-    const x = door.col * TILE;
-    const y = door.row * TILE;
-    if (door.open) {
-      ctx.fillStyle = '#0d2126';
-      ctx.fillRect(x + 4, y + 4, TILE - 8, TILE - 8);
-      return;
-    }
-    ctx.fillStyle = '#3a2a12';
-    ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
-    ctx.strokeStyle = PALETTE.gold;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 5, y + 5, TILE - 10, TILE - 10);
-    ctx.fillStyle = PALETTE.gold;
-    ctx.beginPath();
-    ctx.arc(x + TILE / 2, y + TILE / 2, 4, 0, Math.PI * 2);
-    ctx.fill();
-    if (door.progress > 0) {
-      ctx.fillStyle = '#0b1c22';
-      ctx.fillRect(x + 2, y - 8, TILE - 4, 6);
-      ctx.fillStyle = PALETTE.gold;
-      ctx.fillRect(x + 2, y - 8, (TILE - 4) * (door.progress / TUNING.lockpickSeconds), 6);
-    }
-  }
-}
-
-function drawLasers(ctx, lasers, time, empFrozen) {
-  for (const laser of lasers) {
-    const live = !empFrozen && laserIsLive(laser, time);
-    ctx.strokeStyle = live ? PALETTE.laser : PALETTE.laserDim;
-    ctx.lineWidth = live ? 3 : 1.5;
-    ctx.setLineDash(live ? [] : [6, 6]);
-    ctx.beginPath();
-    ctx.moveTo(laser.x1, laser.y1);
-    ctx.lineTo(laser.x2, laser.y2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    if (live) {
-      ctx.fillStyle = PALETTE.laser;
+    } else if (l.kind === 'gold') {
+      ctx.fillStyle = VELVET_COLORS.gold;
+      ctx.fillRect(l.x - 14, l.y - 7, 28, 14);
+      ctx.fillStyle = '#ffe9a8';
+      ctx.fillRect(l.x - 14, l.y - 7, 28, 5);
+      ctx.strokeStyle = VELVET_COLORS.goldDark;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(l.x - 14, l.y - 7, 28, 14);
+    } else if (l.kind === 'golden') {
+      const pulse = 0.6 + 0.4 * Math.sin(level.now * 3);
+      ctx.fillStyle = 'rgba(242, 193, 78,' + (0.25 * pulse) + ')';
       ctx.beginPath();
-      ctx.arc(laser.x1, laser.y1, 5, 0, Math.PI * 2);
-      ctx.arc(laser.x2, laser.y2, 5, 0, Math.PI * 2);
+      ctx.arc(l.x, l.y, 30 + 6 * pulse, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = VELVET_COLORS.gold;
+      ctx.beginPath();
+      ctx.arc(l.x, l.y, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#7a5c00';
+      ctx.font = 'bold 13px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('★', l.x, l.y + 5);
+      ctx.fillStyle = VELVET_COLORS.gold;
+      ctx.font = 'bold 11px Arial, sans-serif';
+      ctx.fillText('GOLDEN CHIP', l.x, l.y - 26);
+    } else if (l.kind === 'safe') {
+      ctx.fillStyle = '#2b2f3a';
+      ctx.fillRect(l.x - 18, l.y - 14, 36, 28);
+      ctx.strokeStyle = VELVET_COLORS.gold;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(l.x - 18, l.y - 14, 36, 28);
+      ctx.fillStyle = VELVET_COLORS.gold;
+      ctx.beginPath();
+      ctx.arc(l.x, l.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = VELVET_COLORS.cream;
+      ctx.font = 'bold 9px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('SAFE $1000', l.x, l.y - 20);
     }
-    ctx.fillStyle = live ? '#ff8fa0' : '#5c2430';
-    ctx.font = 'bold 10px sans-serif';
-    ctx.textAlign = 'center';
-    const mx = (laser.x1 + laser.x2) / 2;
-    const my = (laser.y1 + laser.y2) / 2;
-    ctx.fillText(live ? 'LASER' : 'laser off', mx, my - 8);
   }
+  // Pedestal under the Golden Chip.
+  ctx.fillStyle = '#241a33';
+  ctx.fillRect(level.vaultPedestal.x - 22, level.vaultPedestal.y + 12, 44, 10);
 }
 
-function drawLoot(ctx, loot, taken, time, levelIndex) {
-  if (taken) return;
-  const pulse = 1 + Math.sin(time * 3) * 0.12;
-  ctx.save();
-  ctx.translate(loot.x, loot.y);
-  ctx.scale(pulse, pulse);
-  const grad = ctx.createRadialGradient(0, 0, 4, 0, 0, 46);
-  grad.addColorStop(0, 'rgba(242,193,78,0.55)');
-  grad.addColorStop(1, 'rgba(242,193,78,0)');
-  ctx.fillStyle = grad;
+function velvetDrawCone(ctx, poly, color) {
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(0, 0, 46, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = PALETTE.gold;
-  ctx.beginPath();
-  ctx.moveTo(0, -14);
-  ctx.lineTo(10, 2);
-  ctx.lineTo(6, 12);
-  ctx.lineTo(-6, 12);
-  ctx.lineTo(-10, 2);
+  ctx.moveTo(poly[0].x, poly[0].y);
+  for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#fff3c4';
-  ctx.beginPath();
-  ctx.arc(0, -2, 3.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  ctx.fillStyle = PALETTE.gold;
-  ctx.font = 'bold 11px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('LOOT: ' + LOOT_NAMES[levelIndex], loot.x, loot.y + 30);
 }
 
-function drawExit(ctx, exit, lootTaken, time) {
-  const glow = lootTaken ? 0.9 : 0.35;
-  ctx.save();
-  ctx.globalAlpha = glow;
-  ctx.fillStyle = PALETTE.exit;
-  ctx.fillRect(exit.x - 18, exit.y - 18, 36, 36);
-  ctx.restore();
-  ctx.strokeStyle = PALETTE.exit;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(exit.x - 18, exit.y - 18, 36, 36);
-  ctx.fillStyle = '#0b1c22';
-  ctx.font = 'bold 11px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('EXIT', exit.x, exit.y + 4);
-  if (lootTaken) {
-    ctx.fillStyle = PALETTE.exit;
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillText('GETAWAY OPEN — RUN!', exit.x, exit.y - 26);
-  } else {
-    ctx.fillStyle = '#cfe8d8';
-    ctx.font = '11px sans-serif';
-    ctx.fillText('locked until loot', exit.x, exit.y - 26);
+function velvetDrawGuards(ctx, level) {
+  const blockers = velvetSightBlockers(level);
+  for (const g of level.guards) {
+    let color = VELVET_COLORS.conePatrol;
+    if (g.state === 'suspicious' || g.state === 'investigate') color = VELVET_COLORS.coneSuspicious;
+    if (g.state === 'chase') color = VELVET_COLORS.coneAlert;
+    const poly = velvetConePolygon(g.x, g.y, g.angle, VELVET.guardSightHalfAngle, VELVET.guardSightRange, blockers, 16);
+    velvetDrawCone(ctx, poly, color);
   }
-}
-
-function drawGuard(ctx, guard, time) {
-  const hot = guard.state === 'chase';
-  drawCone(ctx, guard.x, guard.y, guard.angle, TUNING.guardSight, TUNING.guardConeHalf,
-    hot ? PALETTE.coneHot : PALETTE.cone);
-  ctx.fillStyle = PALETTE.guard;
-  ctx.beginPath();
-  ctx.arc(guard.x, guard.y, 14, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = PALETTE.guardTrim;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = '#0b1c22';
-  ctx.beginPath();
-  ctx.arc(guard.x + Math.cos(guard.angle) * 6, guard.y + Math.sin(guard.angle) * 6, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = PALETTE.guardTrim;
-  ctx.font = 'bold 9px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(hot ? '!' : 'GUARD', guard.x, guard.y - 20);
-}
-
-function drawCamera(ctx, camera, time) {
-  const frozen = camera.frozen > 0;
-  drawCone(ctx, camera.x, camera.y, camera.angle, TUNING.cameraSight, TUNING.cameraConeHalf,
-    frozen ? 'rgba(120,130,140,0.10)' : PALETTE.cameraCone);
-  ctx.fillStyle = frozen ? '#5a6a72' : '#1f7a6e';
-  ctx.fillRect(camera.x - 9, camera.y - 7, 18, 14);
-  ctx.fillStyle = frozen ? '#9fb2ba' : '#ff2e4d';
-  ctx.beginPath();
-  ctx.arc(camera.x + Math.cos(camera.angle) * 12, camera.y + Math.sin(camera.angle) * 12, 4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#cfe8e2';
-  ctx.font = 'bold 9px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(frozen ? 'CAM OFF' : 'CAMERA', camera.x, camera.y - 14);
-}
-
-function drawThief(ctx, player, time) {
-  ctx.save();
-  ctx.translate(player.x, player.y);
-  if (player.inVent) {
-    ctx.globalAlpha = 0.75;
+  for (const cam of level.cameras) {
+    if (level.now < cam.disabledUntil) continue;
+    const poly = velvetConePolygon(cam.x, cam.y, cam.angle, VELVET.cameraSightHalfAngle, VELVET.cameraSightRange, blockers, 14);
+    velvetDrawCone(ctx, poly, VELVET_COLORS.cameraCone);
   }
-  ctx.fillStyle = PALETTE.thiefCoat;
-  ctx.beginPath();
-  ctx.arc(0, 0, 13, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = PALETTE.gold;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = PALETTE.thief;
-  ctx.beginPath();
-  ctx.arc(0, 0, 7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#232a3a';
-  ctx.fillRect(-7, -2, 14, 3);
-  ctx.restore();
-  ctx.fillStyle = PALETTE.thief;
-  ctx.font = 'bold 10px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(player.sneaking ? 'YOU · sneaking' : 'YOU', player.x, player.y - 20);
-}
-
-function drawSmoke(ctx, tools, time) {
-  for (const cloud of tools.smokeClouds) {
-    if (cloud.until <= time) continue;
-    ctx.fillStyle = PALETTE.smoke;
+  for (const cam of level.cameras) {
+    ctx.fillStyle = level.now < cam.disabledUntil ? '#555' : '#ffd640';
     ctx.beginPath();
-    ctx.arc(cloud.x, cloud.y, 52, 0, Math.PI * 2);
+    ctx.arc(cam.x, cam.y, 9, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = '#1d1530';
     ctx.beginPath();
-    ctx.arc(cloud.x - 30, cloud.y + 12, 34, 0, Math.PI * 2);
-    ctx.arc(cloud.x + 32, cloud.y - 10, 36, 0, Math.PI * 2);
+    ctx.arc(cam.x + Math.cos(cam.angle) * 4, cam.y + Math.sin(cam.angle) * 4, 4, 0, Math.PI * 2);
     ctx.fill();
+    if (level.now < cam.disabledUntil) {
+      ctx.fillStyle = '#888';
+      ctx.font = 'bold 9px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('OFF', cam.x, cam.y + 20);
+    }
   }
-}
-
-function drawHud(ctx, s) {
-  ctx.fillStyle = 'rgba(7, 20, 25, 0.88)';
-  ctx.fillRect(0, 0, VIEW_W, 58);
-  ctx.fillStyle = PALETTE.gold;
-  ctx.fillRect(0, 58, VIEW_W, 2);
-  ctx.fillStyle = PALETTE.gold;
-  ctx.font = 'bold 20px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('GILDED VAULT', 14, 26);
-  ctx.fillStyle = PALETTE.hudText;
-  ctx.font = '13px sans-serif';
-  ctx.fillText(LEVEL_NAMES[s.levelIndex] + '  ·  ' + LOOT_NAMES[s.levelIndex], 14, 46);
-  // Alarm meter — big, labelled, impossible to miss.
-  const ax = 560;
-  const aw = 300;
-  ctx.fillStyle = PALETTE.hudText;
-  ctx.font = 'bold 13px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('ALARM', ax, 24);
-  ctx.fillStyle = '#0b1c22';
-  ctx.fillRect(ax, 30, aw, 16);
-  const frac = Math.max(0, Math.min(1, s.alarm / 100));
-  ctx.fillStyle = s.alarm >= TUNING.alarmWarnAt ? PALETTE.alarmHigh : s.alarm >= 30 ? PALETTE.alarmMid : PALETTE.alarmLow;
-  ctx.fillRect(ax, 30, aw * frac, 16);
-  ctx.strokeStyle = PALETTE.hudText;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(ax, 30, aw, 16);
-  ctx.fillStyle = PALETTE.hudText;
-  ctx.font = 'bold 12px sans-serif';
-  ctx.fillText(Math.round(s.alarm) + '%', ax + aw + 8, 44);
-  if (s.alarm >= TUNING.alarmWarnAt) {
-    ctx.fillStyle = PALETTE.alarmHigh;
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText('SPOTTED!', ax, 56 + 0);
-  }
-  // Tools and loot on the right.
-  ctx.textAlign = 'right';
-  ctx.fillStyle = PALETTE.hudText;
-  ctx.font = '13px sans-serif';
-  ctx.fillText('SMOKE [Q] ×' + s.tools.smoke + '    EMP [E] ×' + s.tools.emp, VIEW_W - 14, 26);
-  ctx.fillText((s.lootTaken ? '★ LOOT SECURED  ' : '○ loot not taken  ') + '  SCORE ' + s.score + '  ·  ' + Math.floor(s.time) + 's', VIEW_W - 14, 46);
-  // Objective line under the bar.
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffe9a8';
-  ctx.font = '13px sans-serif';
-  ctx.fillText(s.lootTaken ? 'Objective: reach the green EXIT — the getaway!' : 'Objective: steal the ' + LOOT_NAMES[s.levelIndex] + ', then reach the EXIT.  WASD move · Shift sneak · Q smoke · E EMP · hold F to lockpick', 14, 76);
-}
-
-function drawBanner(ctx, title, sub, color) {
-  ctx.fillStyle = 'rgba(7, 20, 25, 0.82)';
-  ctx.fillRect(0, VIEW_H / 2 - 70, VIEW_W, 140);
-  ctx.fillStyle = color;
-  ctx.font = 'bold 44px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(title, VIEW_W / 2, VIEW_H / 2 - 8);
-  ctx.fillStyle = PALETTE.hudText;
-  ctx.font = '17px sans-serif';
-  ctx.fillText(sub, VIEW_W / 2, VIEW_H / 2 + 30);
-}
-
-function drawTitle(ctx, time) {
-  ctx.fillStyle = '#0a1a20';
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  ctx.fillStyle = PALETTE.gold;
-  ctx.font = 'bold 64px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('GILDED VAULT', VIEW_W / 2, 220);
-  ctx.fillStyle = PALETTE.hudText;
-  ctx.font = '22px sans-serif';
-  ctx.fillText('Midnight at the Maravilla Museum — steal the gold, dodge the cones, vanish.', VIEW_W / 2, 268);
-  ctx.font = '17px sans-serif';
-  ctx.fillStyle = '#ffe9a8';
-  const lines = [
-    'WASD / arrows — move    ·    Shift — sneak (slower, harder to spot)',
-    'Q — smoke pellet (×3)  ·  E — EMP burst, freezes cameras + lasers (×2)',
-    'Hold F by a gold door — lockpick a shortcut    ·    Click — walk there',
-    'Guards patrol with vision cones. Cameras sweep. Lasers blink on and off.',
-    'The ALARM meter rises when you are seen and falls when you hide.',
-    'Grab the LOOT, then reach the green EXIT. Three floors. One clean getaway.',
-  ];
-  lines.forEach((line, i) => ctx.fillText(line, VIEW_W / 2, 330 + i * 30));
-  ctx.fillStyle = Math.sin(time * 4) > 0 ? PALETTE.gold : PALETTE.hudText;
-  ctx.font = 'bold 22px sans-serif';
-  ctx.fillText('CLICK OR PRESS ENTER TO START THE HEIST', VIEW_W / 2, 560);
-}
-
-export function drawGame(ctx, s) {
-  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
-  if (s.screen === 'title') {
-    drawTitle(ctx, s.time);
-    return;
-  }
-  const rows = s.level.map;
-  drawFloor(ctx, s.parsed, rows);
-  drawLoot(ctx, s.parsed.loot, s.lootTaken, s.time, s.levelIndex);
-  drawExit(ctx, s.parsed.exit, s.lootTaken, s.time);
-  drawLasers(ctx, s.lasers, s.time, s.tools.empTimer > 0);
-  for (const camera of s.cameras) drawCamera(ctx, camera, s.time);
-  for (const guard of s.guards) drawGuard(ctx, guard, s.time);
-  drawPedestals(ctx, s.parsed);
-  drawDoors(ctx, s.parsed);
-  drawSmoke(ctx, s.tools, s.time);
-  drawThief(ctx, s.player, s.time);
-  drawHud(ctx, s);
-  if (s.screen === 'caught') {
-    drawBanner(ctx, 'CAUGHT!', 'The alarm hit 100%. The guards closed in. Press R to try this floor again.', PALETTE.alarmHigh);
-  } else if (s.screen === 'levelDone') {
-    drawBanner(ctx, 'CLEAN GETAWAY!', 'Floor cleared — ' + s.levelScore + ' points. Press Enter for the next floor.', PALETTE.exit);
-  } else if (s.screen === 'win') {
-    drawBanner(ctx, 'THE PERFECT HEIST!', 'All three treasures stolen. Final score ' + s.score + '. Press R to run it again.', PALETTE.gold);
-  } else if (s.spottedFlash > 0) {
-    ctx.fillStyle = 'rgba(255,46,77,0.10)';
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.fillStyle = PALETTE.alarmHigh;
-    ctx.font = 'bold 30px sans-serif';
+  for (const g of level.guards) {
+    ctx.fillStyle = VELVET_COLORS.guard;
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = VELVET_COLORS.guardTrim;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = VELVET_COLORS.guardTrim;
+    ctx.beginPath();
+    ctx.arc(g.x + Math.cos(g.angle) * 8, g.y + Math.sin(g.angle) * 8, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('SPOTTED — BREAK LINE OF SIGHT!', VIEW_W / 2, 120);
+    ctx.fillText(g.name[0], g.x, g.y - 18);
+    if (g.state === 'suspicious' || g.state === 'investigate') {
+      ctx.fillStyle = VELVET_COLORS.warn;
+      ctx.font = 'bold 20px Arial, sans-serif';
+      ctx.fillText('?', g.x, g.y - 26);
+    }
+    if (g.state === 'chase') {
+      ctx.fillStyle = VELVET_COLORS.danger;
+      ctx.font = 'bold 22px Arial, sans-serif';
+      ctx.fillText('!', g.x, g.y - 26);
+    }
+    if (g.suspicion > 1 && g.state !== 'chase') {
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(g.x - 14, g.y + 16, 28, 4);
+      ctx.fillStyle = g.suspicion > 55 ? VELVET_COLORS.warn : VELVET_COLORS.safe;
+      ctx.fillRect(g.x - 14, g.y + 16, 28 * (g.suspicion / 100), 4);
+    }
   }
+}
+
+function velvetDrawPlayer(ctx, level, player) {
+  for (const s of level.smokes) {
+    if (level.now > s.until) continue;
+    ctx.fillStyle = VELVET_COLORS.smoke;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(s.x - 30, s.y - 12, s.r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(s.x + 28, s.y + 14, s.r * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const disguised = level.now < player.disguisedUntil;
+  ctx.strokeStyle = VELVET_COLORS.gold;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, VELVET.playerRadius + 4, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = disguised ? '#f5f5f5' : VELVET_COLORS.thiefCoat;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, VELVET.playerRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = disguised ? VELVET_COLORS.gold : '#e8e4da';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = VELVET_COLORS.thief;
+  ctx.beginPath();
+  ctx.arc(player.x + Math.cos(player.angle) * 5, player.y + Math.sin(player.angle) * 5, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1f2a44';
+  ctx.beginPath();
+  ctx.arc(player.x + Math.cos(player.angle) * 5 - 4, player.y + Math.sin(player.angle) * 5 - 2, 2, 0, Math.PI * 2);
+  ctx.arc(player.x + Math.cos(player.angle) * 5 + 3, player.y + Math.sin(player.angle) * 5 - 2, 2, 0, Math.PI * 2);
+  ctx.fill();
+  if (player.hasGolden) {
+    ctx.fillStyle = VELVET_COLORS.gold;
+    ctx.font = 'bold 12px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('★', player.x, player.y - 20);
+  }
+  if (player.weight > 0) {
+    ctx.fillStyle = VELVET_COLORS.gold;
+    ctx.font = 'bold 10px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('$' + player.loot, player.x, player.y + 26);
+  }
+  for (const t of level.tosses) {
+    const p = t.t / t.dur;
+    const x = t.x + (t.tx - t.x) * p;
+    const y = t.y + (t.ty - t.y) * p - Math.sin(p * Math.PI) * 26;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (const c of level.clinks) {
+    ctx.strokeStyle = 'rgba(255, 209, 102,' + (c.life) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 10 + (0.8 - c.life) * 30, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function velvetDrawExit(ctx, level, player) {
+  const z = level.exitZone;
+  const glow = player.hasGolden ? 0.5 + 0.4 * Math.sin(level.now * 4) : 0.3;
+  ctx.fillStyle = 'rgba(57, 217, 138,' + glow + ')';
+  ctx.fillRect(z.x - 6, z.y - 10, z.w + 12, z.h + 16);
+  ctx.fillStyle = VELVET_COLORS.safe;
+  ctx.font = 'bold 13px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(player.hasGolden ? 'GETAWAY →' : 'EXIT', z.x + z.w / 2, z.y - 16);
+}
+
+function velvetDrawFloaters(ctx, level) {
+  ctx.textAlign = 'center';
+  for (const f of level.floaters) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, f.life));
+    ctx.fillStyle = f.color;
+    ctx.font = 'bold 15px Arial, sans-serif';
+    ctx.fillText(f.text, f.x, f.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function velvetDrawHud(ctx, S) {
+  const level = S.level;
+  const player = S.player;
+  ctx.fillStyle = VELVET_COLORS.hudBg;
+  ctx.fillRect(0, 0, 1280, 46);
+  // Alarm meter.
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px Arial, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('ALARM', 16, 19);
+  const ax = 78;
+  const aw = 220;
+  ctx.fillStyle = '#222';
+  ctx.fillRect(ax, 8, aw, 16);
+  const alarmColor = level.alarm > 66 ? VELVET_COLORS.danger : level.alarm > 33 ? VELVET_COLORS.warn : VELVET_COLORS.safe;
+  ctx.fillStyle = alarmColor;
+  ctx.fillRect(ax, 8, aw * (level.alarm / 100), 16);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(ax, 8, aw, 16);
+  if (level.lockdown > 0) {
+    ctx.fillStyle = VELVET_COLORS.danger;
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.fillText('LOCKDOWN ' + Math.ceil(level.lockdown) + 's', ax + aw + 12, 20);
+  }
+  // Loot, lives, time.
+  ctx.fillStyle = VELVET_COLORS.gold;
+  ctx.font = 'bold 16px Arial, sans-serif';
+  ctx.fillText('💰 $' + player.loot, 470, 21);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px Arial, sans-serif';
+  let hearts = '';
+  for (let i = 0; i < S.lives; i++) hearts += '♥ ';
+  ctx.fillStyle = '#ff5d8f';
+  ctx.fillText(hearts, 600, 21);
+  ctx.fillStyle = '#fff';
+  const t = Math.floor(S.elapsed);
+  ctx.fillText('⏱ ' + Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'), 700, 21);
+  // Objective.
+  ctx.fillStyle = player.hasGolden ? VELVET_COLORS.safe : VELVET_COLORS.warn;
+  ctx.font = 'bold 13px Arial, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(player.hasGolden ? '★ Reach the getaway car!' : '★ Steal the Golden Chip', 1264, 20);
+  // Tool bar.
+  ctx.textAlign = 'left';
+  ctx.fillStyle = VELVET_COLORS.hudBg;
+  ctx.fillRect(0, 674, 1280, 46);
+  let tx = 16;
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px Arial, sans-serif';
+  ctx.fillText('TOOLS:', tx, 694);
+  tx += 62;
+  for (const tool of VELVET_TOOLS) {
+    const afford = player.loot >= tool.cost;
+    ctx.fillStyle = afford ? '#2c2a4a' : '#1a1826';
+    ctx.fillRect(tx, 680, 150, 34);
+    ctx.strokeStyle = afford ? VELVET_COLORS.gold : '#444';
+    ctx.strokeRect(tx, 680, 150, 34);
+    ctx.fillStyle = afford ? '#fff' : '#777';
+    ctx.font = 'bold 11px Arial, sans-serif';
+    ctx.fillText('[' + tool.num + '] ' + tool.name + ' $' + tool.cost, tx + 6, 701);
+    tx += 158;
+  }
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px Arial, sans-serif';
+  ctx.fillText('🪙 Toss: ' + player.tossesLeft + ' (click floor)', tx + 8, 701);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#bbb';
+  ctx.fillText('WASD move · Shift run · C sneak · E grab/open · P pause · M mute', 1264, 701);
+  // Interact prompt.
+  if (player.interactTarget && S.screen === 'play') {
+    const it = player.interactTarget;
+    let label = '';
+    if (it.kind === 'chips' || it.kind === 'gold' || it.kind === 'golden') label = 'E — GRAB $' + it.value;
+    else if (it.kind === 'safe') label = 'Hold E — CRACK SAFE ($1000)';
+    else if (it.id) label = 'Hold E — OPEN ' + it.label + (player.interactProgress > 0 ? ' ' + Math.round((player.interactProgress / VELVET.doorOpenSeconds) * 100) + '%' : '');
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    const w = ctx.measureText(label).width + 24;
+    ctx.fillRect(640 - w / 2, 600, w, 30);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, 640, 620);
+    if (player.interactProgress > 0) {
+      ctx.fillStyle = VELVET_COLORS.gold;
+      ctx.fillRect(640 - w / 2, 630, w * (player.interactProgress / VELVET.doorOpenSeconds), 4);
+    }
+  }
+  // Alarm vignette.
+  if (level.alarm > 55) {
+    const pulse = 0.10 + 0.10 * Math.sin(level.now * 6);
+    ctx.strokeStyle = 'rgba(255, 59, 48,' + (pulse + level.alarm / 400) + ')';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(5, 5, 1270, 710);
+  }
+}
+
+function velvetDrawMenu(ctx, S) {
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.78)';
+  ctx.fillRect(0, 0, 1280, 720);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = VELVET_COLORS.gold;
+  ctx.font = 'bold 64px Georgia, serif';
+  ctx.fillText('THE VELVET CHIP', 640, 170);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'italic 22px Georgia, serif';
+  ctx.fillText('One night. One casino. One Golden Chip.', 640, 212);
+  ctx.font = '16px Arial, sans-serif';
+  ctx.fillStyle = '#e8e4da';
+  const lines = [
+    'You are Nico Vale, the smoothest thief in the city. Tonight the Aurelia Casino',
+    'keeps its Golden Chip — worth $5,000 — behind a vault door, four guards and',
+    'three sweeping cameras. Slip past the cones, crack the vault, grab the chip,',
+    'and walk out the front door to the getaway car. Every chip you pocket buys',
+    'a tool: smoke to vanish, an EMP to blind the cameras, a disguise to stroll',
+    'past the guards — but every ounce of loot slows you down. Choose well.',
+    '',
+    'WASD / arrows — move      Shift — run (loud!)      C — sneak (quiet)',
+    'E — grab loot / hold to open doors      Click floor — toss a chip to distract',
+    '1-4 — buy a tool      P — pause      M — mute',
+  ];
+  lines.forEach((ln, i) => ctx.fillText(ln, 640, 268 + i * 26));
+  const best = S.best || 0;
+  if (best > 0) {
+    ctx.fillStyle = VELVET_COLORS.gold;
+    ctx.font = 'bold 16px Arial, sans-serif';
+    ctx.fillText('Best getaway so far: $' + best, 640, 268 + lines.length * 26 + 8);
+  }
+  ctx.fillStyle = VELVET_COLORS.safe;
+  ctx.font = 'bold 22px Arial, sans-serif';
+  const blink = 0.6 + 0.4 * Math.sin(S.level.now * 3);
+  ctx.globalAlpha = blink;
+  ctx.fillText('— Press ENTER or click to begin the heist —', 640, 620);
+  ctx.globalAlpha = 1;
+}
+
+function velvetDrawEndScreen(ctx, S, kind) {
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.82)';
+  ctx.fillRect(0, 0, 1280, 720);
+  ctx.textAlign = 'center';
+  if (kind === 'win') {
+    ctx.fillStyle = VELVET_COLORS.gold;
+    ctx.font = 'bold 56px Georgia, serif';
+    ctx.fillText('GETAWAY!', 640, 180);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'italic 20px Georgia, serif';
+    ctx.fillText('Nico Vale slips into the night with the Golden Chip.', 640, 220);
+    ctx.font = 'bold 18px Arial, sans-serif';
+    ctx.fillStyle = VELVET_COLORS.cream;
+    const rows = [
+      'Loot banked: $' + S.score.loot,
+      'Time bonus: $' + S.score.timeBonus,
+      S.score.ghostBonus > 0 ? 'Ghost bonus (never spotted): $' + S.score.ghostBonus : 'Ghost bonus: $0 (you were spotted)',
+      'TOTAL SCORE: $' + S.score.total,
+    ];
+    rows.forEach((r, i) => ctx.fillText(r, 640, 300 + i * 34));
+    ctx.fillStyle = VELVET_COLORS.safe;
+    ctx.font = 'bold 20px Arial, sans-serif';
+    ctx.fillText('Press ENTER to run it again', 640, 520);
+  } else if (kind === 'busted') {
+    ctx.fillStyle = VELVET_COLORS.danger;
+    ctx.font = 'bold 56px Georgia, serif';
+    ctx.fillText('BUSTED!', 640, 180);
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px Arial, sans-serif';
+    ctx.fillText('Guard ' + (S.level.caughtBy || '') + ' caught you in the act.', 640, 230);
+    ctx.fillText('You dropped a quarter of your unbanked loot and slipped back to the door.', 640, 262);
+    ctx.fillStyle = VELVET_COLORS.warn;
+    ctx.font = 'bold 18px Arial, sans-serif';
+    ctx.fillText('Lives left: ' + S.lives + ' — press ENTER to keep going', 640, 330);
+  } else if (kind === 'gameover') {
+    ctx.fillStyle = VELVET_COLORS.danger;
+    ctx.font = 'bold 56px Georgia, serif';
+    ctx.fillText('THE HOUSE WINS', 640, 180);
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px Arial, sans-serif';
+    ctx.fillText('Three busts. Security walks you out. The Golden Chip stays in the vault.', 640, 230);
+    ctx.fillStyle = VELVET_COLORS.gold;
+    ctx.font = 'bold 18px Arial, sans-serif';
+    ctx.fillText('Final loot: $' + S.player.loot + ' — press ENTER to try again', 640, 300);
+  } else if (kind === 'paused') {
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 48px Georgia, serif';
+    ctx.fillText('PAUSED', 640, 300);
+    ctx.font = '18px Arial, sans-serif';
+    ctx.fillText('P or Esc to resume', 640, 350);
+  }
+}
+
+function velvetRender(ctx, S) {
+  ctx.clearRect(0, 0, 1280, 720);
+  velvetDrawFloor(ctx, S.level);
+  velvetDrawExit(ctx, S.level, S.player);
+  velvetDrawLoot(ctx, S.level);
+  velvetDrawCover(ctx, S.level);
+  velvetDrawDoors(ctx, S.level);
+  velvetDrawGuards(ctx, S.level);
+  velvetDrawPlayer(ctx, S.level, S.player);
+  velvetDrawFloaters(ctx, S.level);
+  velvetDrawWalls(ctx, S.level);
+  velvetDrawHud(ctx, S);
+  if (S.screen === 'menu') velvetDrawMenu(ctx, S);
+  else if (S.screen === 'busted') velvetDrawEndScreen(ctx, S, 'busted');
+  else if (S.screen === 'win') velvetDrawEndScreen(ctx, S, 'win');
+  else if (S.screen === 'gameover') velvetDrawEndScreen(ctx, S, 'gameover');
+  else if (S.screen === 'paused') velvetDrawEndScreen(ctx, S, 'paused');
 }

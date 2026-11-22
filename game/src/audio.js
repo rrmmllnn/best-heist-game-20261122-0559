@@ -1,113 +1,130 @@
-// Gilded Vault — synthesized sound.
-// One job: every blip, chime and siren, made with WebAudio, no audio files.
+// VelvetAudio — every sound is synthesised live with Web Audio. No audio files.
 
-export function makeAudio() {
-  return { ctx: null, muted: false, alarmOn: false, alarmNodes: null };
-}
+const VelvetAudio = {
+  ctx: null,
+  muted: false,
+  master: null,
 
-function ensure(audio) {
-  if (!audio.ctx) {
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      audio.ctx = new AC();
-    } catch (e) {
-      audio.ctx = null;
+  ensure() {
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return;
     }
-  }
-  if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
-  return audio.ctx;
-}
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = 0.42;
+    this.master.connect(this.ctx.destination);
+  },
 
-function tone(audio, freq, dur, type, gain, when, slideTo) {
-  const ctx = ensure(audio);
-  if (!ctx || audio.muted) return;
-  const t0 = ctx.currentTime + (when || 0);
-  const osc = ctx.createOscillator();
-  const g = ctx.createGain();
-  osc.type = type || 'sine';
-  osc.frequency.setValueAtTime(freq, t0);
-  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain || 0.12, t0 + 0.015);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(g);
-  g.connect(ctx.destination);
-  osc.start(t0);
-  osc.stop(t0 + dur + 0.05);
-}
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.master) this.master.gain.value = this.muted ? 0 : 0.42;
+    return this.muted;
+  },
 
-export function playStep(audio) {
-  tone(audio, 180 + Math.random() * 60, 0.06, 'triangle', 0.03);
-}
+  tone(freq, dur, type, vol, slideTo) {
+    if (!this.ctx || this.muted) return;
+    const t0 = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+    gain.gain.setValueAtTime(vol || 0.2, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain);
+    gain.connect(this.master);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  },
 
-export function playPickup(audio) {
-  tone(audio, 660, 0.12, 'sine', 0.14);
-  tone(audio, 990, 0.18, 'sine', 0.14, 0.09);
-  tone(audio, 1320, 0.26, 'sine', 0.12, 0.18);
-}
+  noiseBurst(dur, vol, lowpass) {
+    if (!this.ctx || this.muted) return;
+    const t0 = this.ctx.currentTime;
+    const len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = lowpass || 900;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(vol || 0.15, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.master);
+    src.start(t0);
+  },
 
-export function playSmoke(audio) {
-  tone(audio, 900, 0.35, 'sawtooth', 0.05, 0, 220);
-}
+  footstep(running) {
+    this.noiseBurst(0.07, running ? 0.16 : 0.07, running ? 700 : 420);
+  },
 
-export function playEmp(audio) {
-  tone(audio, 1400, 0.4, 'square', 0.07, 0, 120);
-  tone(audio, 700, 0.3, 'square', 0.05, 0.08, 90);
-}
+  chipClink() {
+    this.tone(2093, 0.09, 'triangle', 0.22);
+    this.tone(2637, 0.14, 'triangle', 0.16);
+  },
 
-export function playPick(audio) {
-  tone(audio, 440, 0.07, 'square', 0.06);
-  tone(audio, 520, 0.07, 'square', 0.06, 0.12);
-}
+  lootChime(value) {
+    const base = value >= 1000 ? 523 : value >= 500 ? 659 : 784;
+    this.tone(base, 0.12, 'triangle', 0.22);
+    setTimeout(() => this.tone(base * 1.25, 0.16, 'triangle', 0.2), 70);
+    setTimeout(() => this.tone(base * 1.5, 0.22, 'triangle', 0.18), 140);
+  },
 
-export function playUnlock(audio) {
-  tone(audio, 523, 0.12, 'sine', 0.12);
-  tone(audio, 784, 0.2, 'sine', 0.12, 0.1);
-}
+  guardBark() {
+    this.tone(220, 0.16, 'square', 0.2, 160);
+    this.tone(330, 0.1, 'square', 0.14, 260);
+  },
 
-export function playLaserZap(audio) {
-  tone(audio, 220, 0.18, 'sawtooth', 0.1, 0, 880);
-}
+  alarmSting() {
+    this.tone(880, 0.22, 'sawtooth', 0.16, 660);
+    setTimeout(() => this.tone(660, 0.22, 'sawtooth', 0.16, 880), 200);
+  },
 
-export function playWin(audio) {
-  const notes = [523, 659, 784, 1047, 1319];
-  notes.forEach((n, i) => tone(audio, n, 0.3, 'sine', 0.13, i * 0.11));
-}
+  cameraZap() {
+    this.tone(1400, 0.08, 'square', 0.1, 900);
+  },
 
-export function playCaught(audio) {
-  tone(audio, 330, 0.5, 'sawtooth', 0.12, 0, 110);
-  tone(audio, 165, 0.7, 'sawtooth', 0.1, 0.2, 55);
-}
+  vaultClunk() {
+    this.noiseBurst(0.18, 0.3, 300);
+    this.tone(90, 0.25, 'sine', 0.3, 55);
+  },
 
-export function startAlarmLoop(audio) {
-  const ctx = ensure(audio);
-  if (!ctx || audio.alarmOn) return;
-  audio.alarmOn = true;
-  const osc = ctx.createOscillator();
-  const g = ctx.createGain();
-  osc.type = 'square';
-  osc.frequency.value = 620;
-  g.gain.value = 0.0;
-  const lfo = ctx.createOscillator();
-  const lfoGain = ctx.createGain();
-  lfo.frequency.value = 2.2;
-  lfoGain.gain.value = 0.035;
-  lfo.connect(lfoGain);
-  lfoGain.connect(g.gain);
-  g.gain.value = 0.035;
-  osc.connect(g);
-  g.connect(ctx.destination);
-  osc.start();
-  lfo.start();
-  audio.alarmNodes = { osc, lfo, g };
-}
+  doorCreak() {
+    this.tone(180, 0.3, 'sawtooth', 0.07, 120);
+  },
 
-export function stopAlarmLoop(audio) {
-  if (!audio.alarmOn || !audio.alarmNodes) return;
-  try {
-    audio.alarmNodes.osc.stop();
-    audio.alarmNodes.lfo.stop();
-  } catch (e) {}
-  audio.alarmNodes = null;
-  audio.alarmOn = false;
-}
+  smokePuff() {
+    this.noiseBurst(0.4, 0.2, 1200);
+  },
+
+  empBuzz() {
+    this.tone(1200, 0.35, 'sawtooth', 0.12, 180);
+  },
+
+  tossClink() {
+    this.tone(1568, 0.07, 'triangle', 0.2);
+    setTimeout(() => this.tone(1319, 0.1, 'triangle', 0.16), 90);
+  },
+
+  bustedSting() {
+    this.tone(392, 0.3, 'sawtooth', 0.2, 196);
+    setTimeout(() => this.tone(311, 0.4, 'sawtooth', 0.2, 155), 260);
+  },
+
+  getawayFanfare() {
+    const notes = [523, 659, 784, 1047, 1319];
+    notes.forEach((n, i) => setTimeout(() => this.tone(n, 0.3, 'triangle', 0.22), i * 110));
+    this.noiseBurst(0.5, 0.12, 500);
+  },
+
+  clickUi() {
+    this.tone(1047, 0.05, 'square', 0.1);
+  },
+};

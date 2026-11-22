@@ -1,72 +1,69 @@
-// Gilded Vault — shared tuning and palette.
-// One job: every number and colour the rest of the game agrees on.
+// The Velvet Chip — tuning constants for the Aurelia Casino heist.
+// One screen, one night: steal the Golden Chip and reach the getaway car.
 
-export const TILE = 40;
-export const COLS = 32;
-export const ROWS = 20;
-export const VIEW_W = COLS * TILE;
-export const VIEW_H = ROWS * TILE;
-
-export const PALETTE = {
-  floorDark: '#122b33',
-  floorLight: '#173842',
-  marbleVein: '#1d4550',
-  wall: '#0a1a20',
-  wallTop: '#274b57',
-  gold: '#f2c14e',
-  goldDim: '#a8842f',
-  velvet: '#7e1f2e',
-  velvetDark: '#5c1420',
-  laser: '#ff2e4d',
-  laserDim: '#7d1226',
-  cone: 'rgba(242, 193, 78, 0.20)',
-  coneHot: 'rgba(255, 46, 77, 0.30)',
-  cameraCone: 'rgba(94, 234, 212, 0.16)',
-  thief: '#f5efe0',
-  thiefCoat: '#232a3a',
-  guard: '#31435c',
-  guardTrim: '#f2c14e',
-  hud: '#0b1c22',
-  hudText: '#f5efe0',
-  alarmLow: '#3fce7c',
-  alarmMid: '#f2c14e',
-  alarmHigh: '#ff2e4d',
-  exit: '#3fce7c',
-  smoke: 'rgba(200, 210, 215, 0.55)',
-};
-
-export const TUNING = {
-  thiefSpeed: 168,
+const VELVET = {
+  worldWidth: 1280,
+  worldHeight: 720,
+  tile: 40,
+  playerRadius: 13,
+  walkSpeed: 168,
+  runSpeed: 258,
   sneakSpeed: 96,
-  ventSpeed: 70,
-  guardSpeed: 62,
-  guardChaseSpeed: 118,
-  guardSight: 185,
-  guardConeHalf: 0.62,
-  cameraSight: 235,
-  cameraConeHalf: 0.5,
-  alarmRiseGuard: 42,
-  alarmRiseCamera: 30,
-  alarmRiseLaser: 55,
-  alarmFall: 14,
-  alarmWarnAt: 55,
-  spotGraceSeconds: 0.9,
-  smokeSeconds: 4,
-  empSeconds: 5,
-  lockpickSeconds: 2.2,
-  lootScore: 1000,
-  levelTimeBonus: 500,
+  guardSpeed: 74,
+  guardChaseSpeed: 196,
+  guardSightRange: 250,
+  guardSightHalfAngle: 0.52,
+  cameraSightRange: 300,
+  cameraSightHalfAngle: 0.42,
+  cameraSweepSpeed: 0.55,
+  suspicionPerSecond: 95,
+  suspicionDecayPerSecond: 34,
+  alarmRisePerSecond: 26,
+  alarmDecayPerSecond: 5,
+  alarmLockdownAt: 100,
+  lockdownSeconds: 12,
+  doorOpenSeconds: 2.6,
+  smokeSeconds: 5,
+  smokeRadius: 118,
+  empSeconds: 8,
+  disguiseSeconds: 10,
+  disguiseSeeThrough: 72,
+  chipTossCount: 6,
+  chipTossCooldown: 1.2,
+  maxLives: 3,
+  lootSlowPerKilo: 0.055,
+  goldenChipValue: 5000,
+  goldBarValue: 500,
+  chipStackValue: 50,
+  safeValue: 1000,
+  toolCosts: { smoke: 150, emp: 200, disguise: 250, lockpick: 100 },
+  timeBonusPerSecond: 12,
+  ghostBonus: 1500,
+  parSeconds: 150,
 };
 
-export const TOOL_DEFS = [
-  { key: 'smoke', label: 'SMOKE', hint: 'Q — smoke pellet', start: 3 },
-  { key: 'emp', label: 'EMP', hint: 'E — EMP burst', start: 2 },
-];
-
-export const LEVEL_NAMES = [
-  'I — Gallery of Gems',
-  'II — Hall of Kings',
-  'III — The Gilded Vault',
-];
-
-export const LOOT_NAMES = ['Star of Maravilla', 'Crown of the Sun Kings', 'The Gilded Idol'];
+const VELVET_COLORS = {
+  felt: '#14532d',
+  feltDark: '#0f3d21',
+  carpet: '#3b1d4e',
+  carpetTrim: '#d4af37',
+  wall: '#241a33',
+  wallTop: '#3a2d55',
+  floor: '#1d1530',
+  gold: '#f2c14e',
+  goldDark: '#b8860b',
+  cream: '#f5ead1',
+  danger: '#ff3b30',
+  warn: '#ffb340',
+  safe: '#39d98a',
+  conePatrol: 'rgba(57, 217, 138, 0.20)',
+  coneSuspicious: 'rgba(255, 179, 64, 0.30)',
+  coneAlert: 'rgba(255, 59, 48, 0.34)',
+  cameraCone: 'rgba(255, 214, 64, 0.20)',
+  smoke: 'rgba(220, 220, 230, 0.55)',
+  thief: '#e8e4da',
+  thiefCoat: '#1f2a44',
+  guard: '#2b3a55',
+  guardTrim: '#ffd166',
+  hudBg: 'rgba(12, 8, 24, 0.82)',
+};
