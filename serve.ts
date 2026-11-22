@@ -1,38 +1,27 @@
-// Gilded Vault — local play-test server.
-// Serves game/ on http://localhost:8080 with no other dependencies.
+// VelvetServe — a tiny static server for play-testing the casino locally.
+// Serves game/ at http://localhost:8080 with no network and no build step.
 
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, statSync } from 'node:fs';
-import { join, resolve, extname } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join, extname, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = resolve(import.meta.dirname ?? '.', 'game');
-const port = Number(process.env.PORT || 8080);
+const root = join(dirname(fileURLToPath(import.meta.url)), 'game');
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg' };
 
-const types = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-};
-
-const server = createServer((req, res) => {
-  const url = new URL(req.url || '/', 'http://localhost');
-  let path = decodeURIComponent(url.pathname);
-  if (path === '/') path = '/index.html';
-  const file = join(root, path);
-  if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) {
-    res.writeHead(404, { 'content-type': 'text/plain' });
-    res.end('not found\n');
-    return;
+const server = createServer(async (req, res) => {
+  try {
+    let path = decodeURIComponent(req.url.split('?')[0]);
+    if (path === '/') path = '/index.html';
+    const file = join(root, path);
+    if (!file.startsWith(root)) { res.writeHead(403); res.end(); return; }
+    const data = await readFile(file);
+    res.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream' });
+    res.end(data);
+  } catch {
+    res.writeHead(404);
+    res.end('not found');
   }
-  res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream' });
-  createReadStream(file).pipe(res);
 });
 
-server.listen(port, () => {
-  console.log(`Gilded Vault serving game/ at http://localhost:${port}`);
-});
+server.listen(8080, () => console.log('The Velvet Chip at http://localhost:8080'));

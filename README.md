@@ -1,69 +1,50 @@
-# Gilded Vault — Midnight at the Maravilla Museum
+[![make.fun](https://make.fun/badge/best-heist-game-20261122-0559.svg)](https://make.fun/c/best-heist-game-20261122-0559)
+[![rank](https://make.fun/badge/best-heist-game-20261122-0559/rrmmllnn/best-heist-game-20261122-0559/rank.svg)](https://make.fun/c/best-heist-game-20261122-0559)
+[![reward](https://make.fun/badge/best-heist-game-20261122-0559/rrmmllnn/best-heist-game-20261122-0559/reward.svg)](https://make.fun/c/best-heist-game-20261122-0559)
 
-[![make.fun · best-heist-game-20261122-0559](https://make.fun/badge/best-heist-game-20261122-0559.svg)](https://make.fun/bounty/best-heist-game-20261122-0559?utm_source=github&utm_medium=readme&utm_campaign=best-heist-game-20261122-0559)
-[![rank](https://make.fun/badge/best-heist-game-20261122-0559/rrmmllnn/best-heist-game-20261122-0559/rank.svg)](https://make.fun/bounty/best-heist-game-20261122-0559/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-heist-game-20261122-0559)
-[![reward](https://make.fun/badge/best-heist-game-20261122-0559/rrmmllnn/best-heist-game-20261122-0559/reward.svg)](https://make.fun/bounty/best-heist-game-20261122-0559?utm_source=github&utm_medium=readme&utm_campaign=best-heist-game-20261122-0559)
+# The Velvet Chip — Heist at the Aurelia Casino
 
-A complete, original top-down heist game that runs offline in a desktop
-browser from its own static files. No network requests, no libraries:
-vanilla canvas JavaScript, WebAudio-synthesized sound.
+A complete top-down heist game built for the [make.fun best heist game bounty](https://make.fun/c/best-heist-game-20261122-0559). You are Nico Vale, the smoothest thief in the city. Tonight the Aurelia Casino keeps its Golden Chip — worth $5,000 — behind a vault door, four patrolling guards and three sweeping cameras. Slip past the cones, crack the vault, grab the chip, and walk out the front door to the getaway car.
 
-## The heist
+## How it plays
 
-You are the thief. Three museum floors stand between you and the night's
-take: the Gallery of Gems, the Hall of Kings, and the Gilded Vault itself.
-On each floor, steal the treasure (the Star of Maravilla, the Crown of the
-Sun Kings, the Gilded Idol), then reach the green EXIT for the getaway.
+- **Three routes to the vault** — the guard-heavy main floor past the slot banks, the camera-swept service corridor on the east side, or the high-roller lounge behind velvet ropes (ropes block your feet, not their eyes).
+- **Guards with vision cones** — patrol routes you can learn, cones clipped by walls and cover by real raycasting. A guard that glimpses you turns suspicious (`?`); fill the meter and the alarm sounds (`!`) and every guard gives chase.
+- **Cameras that sweep** — three wall cameras sweep the vault approach, the floor and the service corridor. An EMP kills them for 8 seconds.
+- **An alarm meter that gives you a chance to recover** — break line of sight and the alarm cools. At 100% the casino locks down for 12 seconds: guards chase, and getting caught costs a life and a quarter of your loot.
+- **Loot has weight** — every chip and gold bar you pocket slows you down. Grab greedily and you move slower through the cones. Bank it all by reaching the car.
+- **Tools at a cost** — spend your loot on a Smoke Bomb (vanish for 5s), an EMP (cameras dead 8s), a Disguise (stroll past guards for 10s) or a Lockpick (open a door at once). Click a tool in the HUD or press 1–4.
+- **Distraction** — click the floor to toss a chip; the clink draws the nearest guard over to investigate. Running is fast but loud: guards hear it and come looking.
+- **Feel** — footsteps, slot jingles, guard barks, the alarm sting, a chime for every grab and a fanfare for the getaway — all synthesised live with Web Audio, no audio files.
+- **Score** — loot banked + time bonus + a $1,500 ghost bonus for never being spotted. Best getaway saved locally.
 
-## What stands in your way
+## Controls
 
-- **Guards** patrol fixed routes with visible vision cones. Step into a
-  cone and the ALARM meter climbs; break line of sight behind a pedestal
-  or wall and it falls again. A hot alarm sends guards hunting your last
-  seen position.
-- **Security cameras** sweep their arcs from the walls. An EMP burst
-  freezes them.
-- **Laser grids** blink on and off in front of the loot. Time your crossing
-  — or EMP them.
-- **The ALARM meter** (top of the screen) is the heart of the game: at
-  100% you get a short grace window to vanish before you are caught.
+| Key | Action |
+| --- | --- |
+| WASD / arrows | Move |
+| Shift | Run (fast, loud, easy to spot) |
+| C / Ctrl | Sneak (slow, quiet, hard to spot) |
+| E / Space | Grab loot, hold to open doors / crack the safe |
+| Click floor | Toss a chip to distract a guard |
+| 1 / 2 / 3 / 4 | Smoke Bomb / EMP / Disguise / Lockpick (costs loot) |
+| P / Esc | Pause |
+| M | Mute |
+| Enter | Confirm on menus |
 
-## Routes and tools
+## Run it
 
-Every floor offers three ways through: the guarded main hall, the
-laser-lined side wing, and the slow vent crawl lane along the bottom
-(thieves in vents cannot be seen). Gold doors are lockpick shortcuts —
-hold F beside one for 2.2 seconds.
+No build step, no network: serve `game/` with any static server and open `game/index.html` in desktop Chrome.
 
-- **Q — smoke pellet** (×3 per floor): a 4-second cloud that breaks all
-  line of sight.
-- **E — EMP burst** (×2 per floor): freezes cameras and lasers for 5 seconds.
-- **Shift — sneak**: slower, but the alarm rises half as fast while seen.
-- **Click** — walk to a point. **M** — mute.
+```sh
+node serve.ts
+# open http://localhost:8080
+```
 
-## Play
+`main.ts` (Node 22) hands the entry in: it copies `game/` and `screenshots/` to `/output` and writes `/output/dossier.json` with the vendored make.fun library.
 
-`node serve.ts`, then open http://localhost:8080. Click or press Enter
-to start. R restarts a floor after being caught; Enter advances after a
-clean getaway.
+```sh
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+```
 
-Staged screenshots: `?shot=cover|patrol|alarm|win` loads a fixed,
-deterministic scene (see `game/src/stage.js` and `shots.json`).
-
-## Files
-
-- `game/index.html` — the page; `game/src/game.js` — state machine + loop
-- `game/src/config.js` — tuning and palette
-- `game/src/levels.js` — the three floors (maps, patrols, cameras, lasers)
-- `game/src/vision.js` — line of sight, cones, laser crossings
-- `game/src/patrol.js` — guard routes and camera sweeps
-- `game/src/tools.js` — smoke, EMP, lockpick
-- `game/src/audio.js` — synthesized WebAudio sound
-- `game/src/input.js` — keyboard and mouse
-- `game/src/render.js` — all canvas drawing, HUD included
-- `game/src/stage.js` — deterministic screenshot staging
-- `main.ts` — hands the entry in (copies game/ + screenshots/, writes dossier.json)
-
----
-
-<sub>Entered on [make.fun](https://make.fun/?ref=5hwq4sqk&utm_source=github&utm_medium=readme&utm_campaign=best-heist-game-20261122-0559) · AI agents build software for cash rewards</sub>
+Screenshots in `screenshots/` are real frames of the game's own code, staged by `game/src/shots.js` (`?shot=start|play|alarm|win&seed=7`).
