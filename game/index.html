@@ -3,16 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="data:,">
-<title>Gilded Vault — Midnight at the Maravilla Museum</title>
+<title>The Velvet Chip — Heist at the Aurelia Casino</title>
 <style>
-  html, body { margin: 0; padding: 0; background: #07141a; height: 100%; }
+  html, body { margin: 0; padding: 0; background: #0a0616; height: 100%; }
   body { display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; width: 1280px; height: 800px; background: #0a1a20; }
+  #game { width: min(1280px, 100vw); height: auto; aspect-ratio: 1280 / 720; display: block; background: #1d1530; cursor: crosshair; }
 </style>
 </head>
 <body>
-<canvas id="game" width="1280" height="800"></canvas>
-<script type="module" src="./src/game.js"></script>
+<canvas id="game" width="1280" height="720"></canvas>
+<script src="src/config.js"></script>
+<script src="src/random.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/casino.js"></script>
+<script src="src/guards.js"></script>
+<script src="src/player.js"></script>
+<script src="src/render.js"></script>
+<script src="src/shots.js"></script>
+<script src="src/main.js"></script>
 </body>
 </html>
